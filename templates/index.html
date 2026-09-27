@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDG-Predictor</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+        integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <style>
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: linear-gradient(135deg, #eef4fb 0%, #f7f9fc 55%, #edf7f4 100%);
+            margin: 0;
+            padding: 24px 12px;
+            color: #263238;
+        }
+        .container {
+            max-width: 880px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 28px;
+            border-radius: 14px;
+            box-shadow: 0 12px 32px rgba(42, 67, 101, 0.12);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+            color: #17324d;
+            font-weight: 650;
+        }
+        .subtitle {
+            margin: 5px 0 0;
+            color: #60758a;
+            font-size: 14px;
+        }
+        .intro-card {
+            margin: 18px 0 22px;
+            padding: 15px 17px;
+            border: 1px solid #dce8f3;
+            border-left: 4px solid #409eff;
+            background: #f7fbff;
+            border-radius: 8px;
+            line-height: 1.55;
+        }
+        .field-help {
+            margin-top: 7px;
+            color: #6b7f90;
+            font-size: 13px;
+        }
+        .indent-text {
+            padding-left: 30px;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 18px;
+            background-color: #e8f5e9;
+            border: 1px solid #c9e8d0;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 18px;
+        }
+        .result-meta {
+            margin-top: 6px;
+            color: #56705d;
+            font-size: 13px;
+        }
+        .notes {
+            margin-top: 30px;
+            padding: 18px 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+        .notes h3 {
+            color: #29445f;
+            font-size: 19px;
+            margin-bottom: 12px;
+        }
+        .img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        @media (max-width: 576px) {
+            body { padding: 0; }
+            .container { border-radius: 0; padding: 20px 16px; }
+            .header { align-items: flex-start; }
+            .header h1 { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container" v-loading="isLoading">
+        <div class="header">
+            <div>
+                <h1>DDG-Predictor</h1>
+                <p class="subtitle">Sequence-based prediction of mutation-induced protein stability changes</p>
+            </div>
+            <template>
+                <el-button type="text" @click="open">Contact Us</el-button>
+            </template>
+        </div>
+
+        <form @submit.prevent="submitForm">
+            <div class="content">
+                <div>
+                    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+                        <button class="navbar-toggler" type="button" data-toggle="collapse"
+                            data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                            aria-expanded="false" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                            <ul class="navbar-nav mr-auto navbar-right">
+                                <li class="nav-item active">
+                                    <a class="nav-link" href="">Home <span class="sr-only">(current)</span></a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="https://github.com/remnantsaint/ddg-predictor"
+                                        target="_blank">Download</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </nav>
+                </div>
+
+                <div class="intro-card">
+                    Enter a wild-type protein sequence and one or more simultaneous substitutions.
+                    Single-point and multi-point mutation sets are processed by the same model.
+                </div>
+
+                <div class="form-group">
+                    <label>Protein Sequence</label>
+                    <el-input type="textarea" v-model="sequence" :rows="4"
+                        placeholder="e.g. MKLRIATIAGLVVLGSGFAVAQTDVIAQRKAILKQM..."></el-input>
+                    <div class="field-help">Whitespace and line breaks are ignored. Use the 20 standard one-letter amino acid codes.</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Mutation set</label>
+                    <el-input v-model="mutations" placeholder="e.g. E94H, F88Y_L91A, or S262A_H266A_N269R"></el-input>
+                    <div class="field-help">Positions are 1-based. Separate simultaneous substitutions with underscores.</div>
+                </div>
+
+                <div class="form-group">
+                    <el-button type="primary" :disabled="!canSubmit" native-type="submit">
+                        Predict ΔΔG
+                    </el-button>
+                </div>
+
+                <div v-if="resultReady" class="result-box">
+                    {% raw %}
+                    <strong>{{ mutation }}</strong><br>
+                    Predicted ΔΔG: <strong>{{ ddg }} kcal/mol</strong>
+                    <div class="result-meta">{{ mutationCount }} simultaneous substitution<span v-if="mutationCount !== 1">s</span></div>
+                    {% endraw %}
+                </div>
+
+                <div v-if="errorMsg" class="alert alert-danger" style="margin-top: 15px;">
+                    {% raw %}{{ errorMsg }}{% endraw %}
+                </div>
+            </div>
+        </form>
+
+        <div class="notes">
+            <h3>Notes</h3>
+            <p class="indent-text">- The sequence must use standard single-letter amino acid codes (20 common residues).</p>
+            <p class="indent-text">- Use one-based mutation tokens such as E94H; separate simultaneous substitutions with underscores.</p>
+            <p class="indent-text">- Up to 10 substitutions may be submitted in one mutation set.</p>
+            <p class="indent-text">- Every wild-type amino acid is checked against the same reference sequence before the multi-mutant is constructed.</p>
+            <p class="indent-text">- Prediction may take 10-20 seconds depending on sequence length and server load.</p>
+            <p class="indent-text">- This model uses the convention that negative ΔΔG indicates destabilization and positive ΔΔG indicates stabilization.</p>
+            <p class="indent-text">- If you encounter any issues or have questions, feel free to contact us via the email provided in the top-right corner.</p>
+        </div>
+
+        <div class="footer">
+            <img class="img" src="{{ url_for('static', path='figure.jpg') }}" alt="Model Architecture">
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@2/dist/vue.js"></script>
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                isLoading: false,
+                sequence: '',
+                mutations: '',
+                ddg: null,
+                mutation: '',
+                mutationCount: 0,
+                resultReady: false,
+                errorMsg: '',
+            },
+            computed: {
+                canSubmit: function () {
+                    return this.sequence && this.mutations && !this.isLoading;
+                },
+            },
+            methods: {
+                open: function () {
+                    this.$msgbox({
+                        title: 'Email',
+                        message: 'remsait647@nefu.edu.cn',
+                        showCancelButton: true,
+                        confirmButtonText: 'Copy',
+                        cancelButtonText: 'Close',
+                        beforeClose: function (action, instance, done) {
+                            if (action === 'confirm') {
+                                var textarea = document.createElement("textarea");
+                                textarea.value = 'remsait647@nefu.edu.cn';
+                                document.body.appendChild(textarea);
+                                textarea.select();
+                                document.execCommand("copy");
+                                document.body.removeChild(textarea);
+                            }
+                            done();
+                        },
+                    });
+                },
+                submitForm: function () {
+                    if (this.isLoading) return;
+                    this.isLoading = true;
+                    this.resultReady = false;
+                    this.errorMsg = '';
+                    var self = this;
+                    fetch('predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sequence: self.sequence,
+                            mutations: self.mutations,
+                        }),
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            self.isLoading = false;
+                            if (data.error) {
+                                self.errorMsg = data.error;
+                                return;
+                            }
+                            self.ddg = data.ddg;
+                            self.mutation = data.mutation;
+                            self.mutationCount = data.mutation_count;
+                            self.resultReady = true;
+                        })
+                        .catch(function (e) {
+                            self.isLoading = false;
+                            self.errorMsg = 'Request failed: ' + e.message;
+                        });
+                },
+            },
+        });
+    </script>
+</body>
+</html>
